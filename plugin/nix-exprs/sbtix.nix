@@ -1,6 +1,6 @@
-{ runCommand, fetchurl, lib, stdenv, jdk, sbt, writeText }:
+# This file originates from SBTix
+{ runCommand, fetchurl, lib, stdenv, jdk, jre, sbt, writeText, makeWrapper }:
 with stdenv.lib;
-with import <nixpkgs> {};
 
 let sbtTemplate = repoDefs: versioning:
     let
@@ -22,11 +22,10 @@ let sbtTemplate = repoDefs: versioning:
         # http://www.scala-sbt.org/0.13.5/docs/Launcher/Configuration.html
         sbtixRepos = writeText "sbtixRepos" ''
         [repositories]
-        ${repoDefs}
+        ${concatStringsSep "\n  " repoDefs}
         local
         '';
     in stdenv.mkDerivation (rec {
-            
             name = "sbt-setup-template";
 
             dontPatchELF      = true;
@@ -36,6 +35,7 @@ let sbtTemplate = repoDefs: versioning:
             SBT_OPTS = ''
              -Dsbt.ivy.home=./.ivy2/
              -Dsbt.boot.directory=./.sbt/boot/
+             -Dsbt.global.base=./.sbt
              -Dsbt.global.staging=./.staging
              -Dsbt.override.build.repos=true
              -Dsbt.repository.config=${sbtixRepos}
@@ -49,17 +49,17 @@ let sbtTemplate = repoDefs: versioning:
 
               ln -s ${buildProperties} ./project/build.properties
             '';
-            
+
             buildInputs = [ jdk sbt ];
 
             buildPhase = ''sbt compile:compileIncremental'';
-            
+
             installPhase =''
               mkdir -p $out
-              # Copy the hidden ivy lock files. Only keep ivy cache folder, not ivy local. local might be empty now but I want to be sure it is not polluted in the future. 
+              # Copy the hidden ivy lock files. Only keep ivy cache folder, not ivy local. local might be empty now but I want to be sure it is not polluted in the future.
               rm -rf ./.ivy2/local
-              cp -r ./.ivy2 $out/ivy
-              cp -r ./.sbt $out/sbt 
+              cp -r --remove-destination ./.ivy2 $out/ivy
+              cp -r --remove-destination ./.sbt $out/sbt
             '';
     });
 
@@ -71,52 +71,60 @@ let sbtTemplate = repoDefs: versioning:
                   "chmod -R u+rw $out"
                 ];
         in
-            lib.concatStringsSep "\n" (["mkdir -p $out"] ++ lib.concatLists (map copyTemplate templates)) 
+            lib.concatStringsSep "\n" (["mkdir -p $out"] ++ lib.concatLists (map copyTemplate templates))
         );
 
 in rec {
     mkRepo = name: artifacts: runCommand name {}
         (let
-            parentDirs = filePath: 
+            parentDirs = filePath:
                 concatStringsSep "/" (init (splitString "/" filePath));
             linkArtifact = outputPath: urlAttrs:
-                [ "mkdir -p \"$out/${parentDirs outputPath}\""
-                  "ln -fsn \"${fetchurl urlAttrs}\" \"$out/${outputPath}\""
+                [ ''mkdir -p "$out/${parentDirs outputPath}"''
+                  ''ln -fsn "${fetchurl urlAttrs}" "$out/${outputPath}"''
                 ];
         in
             lib.concatStringsSep "\n" (lib.concatLists (lib.mapAttrsToList linkArtifact artifacts)));
-    
-    repoConfig = repos: nixrepo:
-    let
-        repoPatternOptional = repoPattern:
-            optionalString (repoPattern != "") ", ${repoPattern}";
-        repoPath = repoName: repoPattern:
-            [ "${repoName}: file://${nixrepo}/${repoName}${repoPatternOptional repoPattern}" ];
-    in
-        lib.concatStringsSep "\n  " (lib.concatLists (lib.mapAttrsToList repoPath repos));
+
+    repoConfig = {repos, nixrepo, name}:
+        let
+            repoPatternOptional = repoPattern:
+                optionalString (repoPattern != "") ", ${repoPattern}";
+            repoPath = repoName: repoPattern:
+                [ "${name}-${repoName}: file://${nixrepo}/${repoName}${repoPatternOptional repoPattern}" ];
+        in
+            lib.concatLists (lib.mapAttrsToList repoPath repos);
+
+    ivyRepoPattern = "[organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]";
 
     mergeAttr = attr: repo:
         fold (a: b: a // b) {} (catAttrs attr repo);
 
-    buildSbtProject = args@{repo, name, buildInputs ? [], sbtOptions ? "", ...}:
+    buildSbtProject = args@{repo, name, buildInputs ? [], sbtixBuildInputs ? [], sbtOptions ? "", ...}:
       let
           versionings = unique (flatten (catAttrs "versioning" repo));
           artifacts = mergeAttr "artifacts" repo;
           repos = mergeAttr "repos" repo;
           nixrepo = mkRepo "${name}-repo" artifacts;
-          repoDefs = repoConfig repos nixrepo;
+          thisFetchedDependencies = { inherit repos nixrepo name; };
+
+          fetchedDependencies = [thisFetchedDependencies] ++ concatMap (d: d.fetchedRepos) sbtixBuildInputs;
+          repoDefs = concatMap repoConfig fetchedDependencies;
+
+          builtDependencies = concatMap (d: [ d ] ++ d.builtRepos) sbtixBuildInputs;
+
           sbtSetupTemplate = mergeSbtTemplates(map (sbtTemplate repoDefs) versionings);
 
           # SBT Launcher Configuration
           # http://www.scala-sbt.org/0.13.5/docs/Launcher/Configuration.html
           sbtixRepos = writeText "sbtixRepos" ''
             [repositories]
-            ${repoDefs}
+            ${concatStringsSep "\n  " (map (d: "${d.name}: file://${d}, ${ivyRepoPattern}") builtDependencies)}
+            ${concatStringsSep "\n  " repoDefs}
             local
             '';
 
       in stdenv.mkDerivation (rec {
-            
             dontPatchELF      = true;
             dontStrip         = true;
 
@@ -132,17 +140,40 @@ in rec {
 
             # set environment variable to affect all SBT commands
             SBT_OPTS = ''
-             -Dsbt.ivy.home=./.ivy2/
-             -Dsbt.boot.directory=./.sbt/boot/
-             -Dsbt.global.staging=./.staging
-             -Dsbt.override.build.repos=true
-             -Dsbt.repository.config=${sbtixRepos}
-             ${sbtOptions}'';
-            
+              -Dsbt.ivy.home=./.ivy2/
+              -Dsbt.boot.directory=./.sbt/boot/
+              -Dsbt.global.base=./.sbt
+              -Dsbt.global.staging=./.staging
+              -Dsbt.override.build.repos=true
+              -Dsbt.repository.config=${sbtixRepos}
+              ${sbtOptions}
+            '';
 
-            buildPhase = ''sbt compile'';
+            buildPhase = ''pwd && sbt compile'';
         } // args // {
             repo = null;
-            buildInputs = [ jdk sbt ] ++ buildInputs;
-        });
+            buildInputs = [ makeWrapper jdk sbt ] ++ buildInputs;
+        }) // {
+            builtRepos = builtDependencies;
+            fetchedRepos = fetchedDependencies;
+        };
+
+    buildSbtLibrary = args: buildSbtProject ({
+        installPhase = ''
+          sbt publishLocal
+          mkdir -p $out/
+          cp ./.ivy2/local/* $out/ -r
+        '';
+    } // args);
+
+    buildSbtProgram = args: buildSbtProject ({
+        installPhase = ''
+          sbt stage
+          mkdir -p $out/
+          cp target/universal/stage/* $out/ -r
+          for p in $out/bin/*; do
+            wrapProgram "$p" --prefix PATH : ${jre}/bin
+          done
+        '';
+    } // args);
 }
