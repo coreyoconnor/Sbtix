@@ -138,3 +138,11 @@ A: You can change the value of `compositionType` in your `build.sbt`. Allowed va
 - [Charles O'Farrel](https://github.com/charleso) - For writing [sbt2nix](https://github.com/charleso/sbt2nix)
 - [Chris Van Vranken](https://github.com/cessationoftime) - For sorting out a lot of dependency-fetching bugs, and adding SBT plugin support
 - [Maximilian Bosch](https://github.com/Ma27) - For fixing the UX of this thing
+
+# References
+
+- [SBT Developer Guide](https://www.scala-sbt.org/1.x/docs/Developers-Guide.html)
+    - [Coding Guidelines](https://www.scala-sbt.org/1.x/docs/Coding-Guideline.html)
+- [Nix Manual](https://nixos.org/nix/manual/)
+- [Nixpkgs Manual](https://nixos.org/nixpkgs/manual/)
+    - [Scala](https://nixos.org/nixpkgs/manual/#sec-language-scala) - TODO
