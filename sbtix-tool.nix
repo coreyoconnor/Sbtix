@@ -32,12 +32,12 @@ let
 
     export PATH=${nix-prefetch-scripts}/bin:$PATH
 
-    # remove the ivy cache of sbtix so sbt retrieves from the sbtix nix repo. 
+    # remove the ivy cache of sbtix so sbt retrieves from the sbtix nix repo.
     # without this your version of sbtix may be overriden by the local ivy cache.
     echo "Deleting any cached sbtix plugins in '~/.ivy'. So the most recent version from nix is used."
     find ~/.ivy2 -name 'se.nullable.sbtix' -type d -exec rm -rf {} \; > /dev/null 2>&1
 
-    #the global plugins directory must be writeable
+    # the global plugins directory must be writeable
     SBTIX_GLBASE_DIR="$HOME/.sbtix"
 
     # if the directory doesn't exist then create it
@@ -60,8 +60,6 @@ let
       unset -v SBT_OPTS
     fi
 
-
-    #the sbt.global.base directory must be writable
     ${sbt}/bin/sbt -Dsbt.global.base=$SBTIX_GLBASE_DIR "$@"
   '';
 
@@ -89,7 +87,7 @@ let
 in
 stdenv.mkDerivation {
   name = "sbtix-${version}";
-  
+
   src = ./.;
 
   phases = [ "installPhase" ];
