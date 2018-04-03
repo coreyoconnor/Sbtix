@@ -99,7 +99,7 @@ In order to use a private repository, add your credentials to `coursierCredentia
 `plugin/src/sbt-test/sbtix/private-auth/build.sbt` for an example! Also, you must currently set the credentials for each SBT subproject, `in ThisBuild`
 doesn't currently work. This is for consistency with Coursier-SBT.
 
-### FAQ
+# FAQ
 
 Q: Why I am getting errors trying to generate `repo.nix` files when using the PlayFramework?
 
@@ -132,17 +132,34 @@ Q: How do I use a different type of SBT build in `default.nix`
 
 A: You can change the value of `compositionType` in your `build.sbt`. Allowed values are `program` and `library`. In the end the `sbtix.buildSbt{compositionType}` API in the nix expressions will be used.
 
-## Thanks
+# Thanks
 
 - [Eelco Dolstra](https://github.com/edolstra) - For getting this whole Nix thing started
 - [Charles O'Farrel](https://github.com/charleso) - For writing [sbt2nix](https://github.com/charleso/sbt2nix)
 - [Chris Van Vranken](https://github.com/cessationoftime) - For sorting out a lot of dependency-fetching bugs, and adding SBT plugin support
 - [Maximilian Bosch](https://github.com/Ma27) - For fixing the UX of this thing
 
-# References
+# Development
+
+## Testing
+
+To run all tests
+
+```
+nix build -f tests -all
+```
+
+To see available tests
+
+```
+nix search -f tests
+```
+
+## References
 
 - [SBT Developer Guide](https://www.scala-sbt.org/1.x/docs/Developers-Guide.html)
     - [Coding Guidelines](https://www.scala-sbt.org/1.x/docs/Coding-Guideline.html)
 - [Nix Manual](https://nixos.org/nix/manual/)
 - [Nixpkgs Manual](https://nixos.org/nixpkgs/manual/)
     - [Scala](https://nixos.org/nixpkgs/manual/#sec-language-scala) - TODO
+    - [Java](https://nixos.org/nixpkgs/manual/#sec-language-java)

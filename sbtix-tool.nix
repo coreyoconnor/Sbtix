@@ -1,4 +1,6 @@
-{ callPackage, writeText, writeScriptBin, stdenv, sbt, nix-prefetch-scripts }:
+{ lib, callPackage
+, writeText, writeScriptBin, stdenv, sbt, nix-prefetch-scripts }:
+with lib;
 let
   version = "0.2";
   versionSnapshotSuffix = "-SNAPSHOT";
@@ -8,7 +10,7 @@ let
   sbtixPluginRepo = sbtix.buildSbtProject {
         name = "sbtix-plugin";
 
-        src = ./plugin;
+        src = cleanSource ./plugin;
         repo = [ (import ./plugin/repo.nix)
                  (import ./plugin/project/repo.nix)
                  (import ./plugin/nix-exprs/manual-repo.nix)
